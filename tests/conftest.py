@@ -1,5 +1,19 @@
 import pytest
 
+class MockRedis:
+    def __init__(self):
+        self.store = {}
+    def set(self, key, value):
+        self.store[key] = value
+    def get(self, key):
+        return self.store.get(key)
+    def ping(self):
+        return True
+
+@pytest.fixture(autouse=True)
+def mock_redis(monkeypatch):
+    monkeypatch.setattr("mcp_bugbot_gitlab.resources.get_redis", lambda: MockRedis())
+
 @pytest.fixture(autouse=True)
 def mock_gitlab_client(monkeypatch):
     class DummyGitLabClient:

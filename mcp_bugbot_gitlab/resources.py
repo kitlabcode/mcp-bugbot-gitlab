@@ -7,13 +7,14 @@ from mcp_bugbot_gitlab.jira_client import JiraClient
 from pydantic import BaseModel
 from collections import defaultdict
 
-# Connect to Redis (fail fast if unavailable)
-try:
-    r = redis.Redis(host='localhost', port=6379, db=0)
-    r.ping()
-except redis.ConnectionError:
-    print("ERROR: Redis is required but not available. Exiting.")
-    sys.exit(1)
+def get_redis():
+    try:
+        r = redis.Redis(host='localhost', port=6379, db=0)
+        r.ping()
+        return r
+    except redis.ConnectionError:
+        print("ERROR: Redis is required but not available. Exiting.")
+        sys.exit(1)
 
 mcp = FastMCP("BugBot MCP Server")
 _gitlab_client = None
@@ -32,11 +33,11 @@ def review_state_key(project_id, mr_iid):
 
 def save_review_state(project_id, mr_iid, state_dict):
     key = review_state_key(project_id, mr_iid)
-    r.set(key, json.dumps(state_dict))
+    get_redis().set(key, json.dumps(state_dict))
 
 def get_review_state(project_id, mr_iid):
     key = review_state_key(project_id, mr_iid)
-    data = r.get(key)
+    data = get_redis().get(key)
     if data:
         return json.loads(data)
     return {
@@ -138,7 +139,7 @@ def chunk_and_store_mr_diff_by_file(project_id, mr_iid):
             continue
         file_paths.append(file_path)
         chunk_key = diff_chunk_key(project_id, mr_iid, file_path)
-        r.set(chunk_key, d['diff'])
+        get_redis().set(chunk_key, d['diff'])
     # Update review state with chunk info
     state = get_review_state(project_id, mr_iid)
     state['diff_chunks'] = file_paths
@@ -158,7 +159,7 @@ def chunk_mr_diff_by_file(params: dict):
 def mr_diff_chunk(project_id: str, mr_iid: int, file_path: str) -> dict:
     """Retrieve a diff chunk for a specific file from Redis."""
     chunk_key = diff_chunk_key(project_id, mr_iid, file_path)
-    diff = r.get(chunk_key)
+    diff = get_redis().get(chunk_key)
     if diff:
         return {"file_path": file_path, "diff": diff.decode('utf-8')}
     return {"error": "Chunk not found"}
@@ -289,7 +290,7 @@ def start_full_project_review(params: dict):
         files = get_gitlab_client().list_project_files(project_id, path="", recursive=True)
         # Cache file list in Redis under a separate key
         key = f"full_project_review:{project_id}:{ref}:files"
-        r.set(key, json.dumps(files))
+        get_redis().set(key, json.dumps(files))
         # Update review state with a flag
         state = get_review_state(project_id, 0)  # Use mr_iid=0 for project-wide review
         state["full_project_review"] = True
