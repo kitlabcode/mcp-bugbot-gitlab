@@ -1,0 +1,6 @@
+fastmcp
+pydantic
+python-gitlab
+python-dotenv
+redis 
+pytest
