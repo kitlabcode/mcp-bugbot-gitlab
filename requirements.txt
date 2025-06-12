@@ -4,3 +4,4 @@ python-gitlab
 python-dotenv
 redis 
 pytest
+jira
